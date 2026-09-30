@@ -3,6 +3,7 @@
  * Install a time-driven trigger with setupTrigger() (run once from the editor).
  */
 function processForwardedEmails() {
+  var plusAddress = getSchedulePlusAddress();
   var query = buildGmailSearchQuery();
   var threads = GmailApp.search(query, 0, 50);
   var processedLabel = getOrCreateLabel_(CONFIG.PROCESSED_LABEL);
@@ -17,6 +18,9 @@ function processForwardedEmails() {
 
     var messages = thread.getMessages();
     var message = messages[messages.length - 1];
+    if (!messageTargetsPlusAddress_(message, plusAddress)) {
+      continue;
+    }
     try {
       processOneMessage_(message, thread, processedLabel, needsReviewLabel);
     } catch (err) {
@@ -66,7 +70,7 @@ function processOneMessage_(message, thread, processedLabel, needsReviewLabel) {
 }
 
 /**
- * Creates an every-5-minutes installable trigger for processForwardedEmails.
+ * Creates an every-5-minutes installable trigger for processForwardedEmails, then processes current mail once.
  * Run this once from the Apps Script editor after authorizing the project.
  */
 function setupTrigger() {
@@ -81,6 +85,7 @@ function setupTrigger() {
     .everyMinutes(5)
     .create();
   Logger.log('Created every-5-minutes trigger for processForwardedEmails.');
+  processForwardedEmails();
 }
 
 /**
@@ -92,6 +97,29 @@ function getOrCreateLabel_(name) {
     label = GmailApp.createLabel(name);
   }
   return label;
+}
+
+/**
+ * Returns true when the message To, Cc, or Delivered-To header contains the schedule plus-address.
+ */
+function messageTargetsPlusAddress_(message, plusAddress) {
+  var needle = String(plusAddress || '').trim().toLowerCase();
+  if (!needle) {
+    return false;
+  }
+  var fields = [message.getTo() || '', message.getCc() || '', message.getBcc() || ''];
+  for (var i = 0; i < fields.length; i++) {
+    if (fields[i].toLowerCase().indexOf(needle) !== -1) {
+      return true;
+    }
+  }
+  var raw = message.getRawContent() || '';
+  var headerEnd = raw.indexOf('\r\n\r\n');
+  if (headerEnd === -1) {
+    headerEnd = raw.indexOf('\n\n');
+  }
+  var headers = headerEnd === -1 ? raw : raw.substring(0, headerEnd);
+  return headers.toLowerCase().indexOf(needle) !== -1;
 }
 
 /**
@@ -108,13 +136,9 @@ function threadHasLabel_(thread, labelName) {
 }
 
 /**
- * Emails the account owner a short confirmation after a Calendar event is created.
+ * Replies to the sender with a short confirmation after a Calendar event is created.
  */
 function notifySuccess_(message, eventData) {
-  var recipient = Session.getActiveUser().getEmail();
-  if (!recipient) {
-    return;
-  }
   var lines = [
     'Hey Forward → Calendar created an event.',
     '',
@@ -138,21 +162,13 @@ function notifySuccess_(message, eventData) {
       CONFIG.PROCESSED_LABEL +
       '". Check your primary Google Calendar for the new event.'
   );
-  GmailApp.sendEmail(
-    recipient,
-    '[schedule-processed] ' + (eventData.title || message.getSubject() || 'Event created'),
-    lines.join('\n')
-  );
+  message.reply(lines.join('\n'));
 }
 
 /**
- * Emails the account owner a short needs-review note with subject and reason.
+ * Replies to the sender with a short needs-review note including the subject and reason.
  */
 function notifyNeedsReview_(message, reason, eventData) {
-  var recipient = Session.getActiveUser().getEmail();
-  if (!recipient) {
-    return;
-  }
   var lines = [
     'Hey Forward → Calendar could not create an event automatically.',
     '',
@@ -171,9 +187,5 @@ function notifyNeedsReview_(message, reason, eventData) {
       CONFIG.NEEDS_REVIEW_LABEL +
       '". Review the email and add the event manually if needed.'
   );
-  GmailApp.sendEmail(
-    recipient,
-    '[schedule-needs-review] ' + (message.getSubject() || 'Forwarded email'),
-    lines.join('\n')
-  );
+  message.reply(lines.join('\n'));
 }

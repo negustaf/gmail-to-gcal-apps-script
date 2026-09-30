@@ -26,8 +26,10 @@ function extractEventFromEmail(subject, body) {
       }
     ],
     generationConfig: {
-      temperature: 0.1,
-      responseMimeType: 'application/json'
+      responseMimeType: 'application/json',
+      thinkingConfig: {
+        thinkingLevel: 'LOW'
+      }
     }
   };
 
@@ -81,7 +83,7 @@ function buildExtractionPrompt_(subject, body) {
 }
 
 /**
- * Pulls the first text part from a Gemini generateContent response body.
+ * Pulls the last non-thought text part from a Gemini generateContent response body.
  */
 function extractGeminiText_(apiResponse) {
   var candidates = apiResponse && apiResponse.candidates;
@@ -89,10 +91,20 @@ function extractGeminiText_(apiResponse) {
     throw new Error('Gemini returned no candidates: ' + JSON.stringify(apiResponse));
   }
   var parts = candidates[0].content && candidates[0].content.parts;
-  if (!parts || !parts.length || !parts[0].text) {
+  if (!parts || !parts.length) {
     throw new Error('Gemini returned empty content: ' + JSON.stringify(apiResponse));
   }
-  return parts[0].text;
+  var text = '';
+  for (var i = 0; i < parts.length; i++) {
+    if (parts[i].thought || !parts[i].text) {
+      continue;
+    }
+    text = parts[i].text;
+  }
+  if (!text) {
+    throw new Error('Gemini returned empty content: ' + JSON.stringify(apiResponse));
+  }
+  return text;
 }
 
 /**

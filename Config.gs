@@ -27,10 +27,10 @@ var CONFIG = {
   /** Only consider messages newer than this Gmail search window. */
   SEARCH_NEWER_THAN: '7d',
 
-  /** When true, email yourself a short confirmation after a Calendar event is created. */
+  /** When true, reply to the sender after a Calendar event is created. */
   EMAIL_SELF_ON_SUCCESS: true,
 
-  /** When true, email yourself a short note for needs-review messages. */
+  /** When true, reply to the sender when a message needs review. */
   EMAIL_SELF_ON_NEEDS_REVIEW: true
 };
 
@@ -52,14 +52,17 @@ function getSchedulePlusAddress() {
 }
 
 /**
- * Builds the Gmail search query for unprocessed plus-address forwards.
+ * Builds the Gmail search for unprocessed plus-address forwards, quoting the address so Gmail does not treat + as the exact-match operator.
  */
 function buildGmailSearchQuery() {
-  var plusAddress = getSchedulePlusAddress();
+  var plusAddress = getSchedulePlusAddress().replace(/"/g, '');
+  var quoted = '"' + plusAddress + '"';
   return (
-    'to:' +
-    plusAddress +
-    ' newer_than:' +
+    '(to:' +
+    quoted +
+    ' OR deliveredto:' +
+    quoted +
+    ') newer_than:' +
     CONFIG.SEARCH_NEWER_THAN +
     ' -label:' +
     CONFIG.PROCESSED_LABEL +

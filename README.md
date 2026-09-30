@@ -9,8 +9,8 @@ Every 5 minutes the script searches Gmail for mail addressed to your plus-addres
 1. In Hey, forward a confirmation or invite to `you+schedule@gmail.com` (same inbox as `you@gmail.com`).
 2. A time-driven Apps Script trigger runs `processForwardedEmails`.
 3. Gemini returns JSON: `title`, `start`, `end`, `allDay`, `location`, `description`, `confidence`.
-4. On success the thread gets the `schedule-processed` label and (by default) you get a short confirmation email.
-5. Low confidence or missing datetime → `schedule-needs-review` (no invented times); by default you also get a needs-review email.
+4. On success the thread gets the `schedule-processed` label and (by default) the sender gets a short confirmation reply.
+5. Low confidence or missing datetime → `schedule-needs-review` (no invented times); by default the sender also gets a needs-review reply.
 
 ## Files
 
@@ -41,7 +41,7 @@ You do **not** need a second Google account for the tag itself. If your Gmail is
 `Config.gs` reads this property and builds a search like:
 
 ```text
-to:transactions.ngustafson+schedule@gmail.com newer_than:7d -label:schedule-processed -label:schedule-needs-review
+(to:"transactions.ngustafson+schedule@gmail.com" OR deliveredto:"transactions.ngustafson+schedule@gmail.com") newer_than:7d -label:schedule-processed -label:schedule-needs-review
 ```
 
 ### 3. Add a Gemini API key
@@ -99,22 +99,22 @@ Example: forward to `transactions.ngustafson+schedule@gmail.com` → install thi
 | `TIMEZONE` | script timezone | Context for relative phrases in the prompt |
 | `CONFIDENCE_THRESHOLD` | `0.7` | Below this → needs review, no event |
 | `SEARCH_NEWER_THAN` | `7d` | Gmail search window |
-| `EMAIL_SELF_ON_SUCCESS` | `true` | Email yourself after a successful Calendar create |
-| `EMAIL_SELF_ON_NEEDS_REVIEW` | `true` | Email yourself when a message needs review |
+| `EMAIL_SELF_ON_SUCCESS` | `true` | Reply to the sender after a successful Calendar create |
+| `EMAIL_SELF_ON_NEEDS_REVIEW` | `true` | Reply to the sender when a message needs review |
 
 ## Idempotency and review behavior
 
 - Threads already labeled `schedule-processed` or `schedule-needs-review` are skipped.
 - The search also excludes those labels, so reruns stay cheap.
 - The script **never invents** start/end times. Missing datetime or low confidence → label only (and optional email), no Calendar write.
-- By default you get an email for **both** success (`[schedule-processed]`) and failure (`[schedule-needs-review]`). Toggle with `EMAIL_SELF_ON_SUCCESS` / `EMAIL_SELF_ON_NEEDS_REVIEW` in `Config.gs`.
+- By default the sender gets a reply for **both** success and failure. Toggle with `EMAIL_SELF_ON_SUCCESS` / `EMAIL_SELF_ON_NEEDS_REVIEW` in `Config.gs`. The reply is sent from the Gmail account and threads onto the forward, so it lands in the inbox that sent it (for example Hey).
 
 ## Manual test
 
 1. Set both Script Properties.
 2. Run `setupTrigger` once (or run `processForwardedEmails` manually).
 3. Forward a real invite from Hey to your plus-address.
-4. Check primary Calendar, the thread labels in Gmail, and your inbox for the confirmation or needs-review email.
+4. Check primary Calendar, the thread labels in Gmail, and the sender's inbox for the confirmation or needs-review reply.
 
 ## Privacy note
 
