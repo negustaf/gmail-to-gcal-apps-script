@@ -9,8 +9,8 @@ Every 5 minutes the script searches Gmail for mail addressed to your plus-addres
 1. In Hey, forward a confirmation or invite to `you+schedule@gmail.com` (same inbox as `you@gmail.com`).
 2. A time-driven Apps Script trigger runs `processForwardedEmails`.
 3. Gemini returns JSON: `title`, `start`, `end`, `allDay`, `location`, `description`, `confidence`.
-4. On success the thread gets the `schedule-processed` label.
-5. Low confidence or missing datetime → `schedule-needs-review` (no invented times); optionally emails you a short note.
+4. On success the thread gets the `schedule-processed` label and (by default) you get a short confirmation email.
+5. Low confidence or missing datetime → `schedule-needs-review` (no invented times); by default you also get a needs-review email.
 
 ## Files
 
@@ -99,6 +99,7 @@ Example: forward to `transactions.ngustafson+schedule@gmail.com` → install thi
 | `TIMEZONE` | script timezone | Context for relative phrases in the prompt |
 | `CONFIDENCE_THRESHOLD` | `0.7` | Below this → needs review, no event |
 | `SEARCH_NEWER_THAN` | `7d` | Gmail search window |
+| `EMAIL_SELF_ON_SUCCESS` | `true` | Email yourself after a successful Calendar create |
 | `EMAIL_SELF_ON_NEEDS_REVIEW` | `true` | Email yourself when a message needs review |
 
 ## Idempotency and review behavior
@@ -106,13 +107,14 @@ Example: forward to `transactions.ngustafson+schedule@gmail.com` → install thi
 - Threads already labeled `schedule-processed` or `schedule-needs-review` are skipped.
 - The search also excludes those labels, so reruns stay cheap.
 - The script **never invents** start/end times. Missing datetime or low confidence → label only (and optional email), no Calendar write.
+- By default you get an email for **both** success (`[schedule-processed]`) and failure (`[schedule-needs-review]`). Toggle with `EMAIL_SELF_ON_SUCCESS` / `EMAIL_SELF_ON_NEEDS_REVIEW` in `Config.gs`.
 
 ## Manual test
 
 1. Set both Script Properties.
 2. Run `setupTrigger` once (or run `processForwardedEmails` manually).
 3. Forward a real invite from Hey to your plus-address.
-4. Check primary Calendar and the thread labels in Gmail.
+4. Check primary Calendar, the thread labels in Gmail, and your inbox for the confirmation or needs-review email.
 
 ## Privacy note
 

@@ -60,6 +60,9 @@ function processOneMessage_(message, thread, processedLabel, needsReviewLabel) {
 
   createCalendarEvent(eventData);
   thread.addLabel(processedLabel);
+  if (CONFIG.EMAIL_SELF_ON_SUCCESS) {
+    notifySuccess_(message, eventData);
+  }
 }
 
 /**
@@ -102,6 +105,44 @@ function threadHasLabel_(thread, labelName) {
     }
   }
   return false;
+}
+
+/**
+ * Emails the account owner a short confirmation after a Calendar event is created.
+ */
+function notifySuccess_(message, eventData) {
+  var recipient = Session.getActiveUser().getEmail();
+  if (!recipient) {
+    return;
+  }
+  var lines = [
+    'Hey Forward → Calendar created an event.',
+    '',
+    'Original subject: ' + (message.getSubject() || '(none)'),
+    'Gmail message id: ' + message.getId(),
+    '',
+    'Title: ' + (eventData.title || '(none)'),
+    'Start: ' + (eventData.start || '(none)'),
+    'End: ' + (eventData.end || '(none)'),
+    'All-day: ' + (eventData.allDay ? 'yes' : 'no'),
+    'Location: ' + (eventData.location || '(none)'),
+    'Confidence: ' + eventData.confidence,
+    ''
+  ];
+  if (eventData.description) {
+    lines.push('Description: ' + eventData.description);
+    lines.push('');
+  }
+  lines.push(
+    'The thread was labeled "' +
+      CONFIG.PROCESSED_LABEL +
+      '". Check your primary Google Calendar for the new event.'
+  );
+  GmailApp.sendEmail(
+    recipient,
+    '[schedule-processed] ' + (eventData.title || message.getSubject() || 'Event created'),
+    lines.join('\n')
+  );
 }
 
 /**

@@ -27,6 +27,9 @@ var CONFIG = {
   /** Only consider messages newer than this Gmail search window. */
   SEARCH_NEWER_THAN: '7d',
 
+  /** When true, email yourself a short confirmation after a Calendar event is created. */
+  EMAIL_SELF_ON_SUCCESS: true,
+
   /** When true, email yourself a short note for needs-review messages. */
   EMAIL_SELF_ON_NEEDS_REVIEW: true
 };
