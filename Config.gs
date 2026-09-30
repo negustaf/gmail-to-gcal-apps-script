@@ -16,7 +16,7 @@ var CONFIG = {
   NEEDS_REVIEW_LABEL: 'schedule-needs-review',
 
   /** Generative Language API model id. */
-  GEMINI_MODEL: 'gemini-2.0-flash',
+  GEMINI_MODEL: 'gemini-3.8-flash',
 
   /** IANA timezone used when interpreting event times and all-day dates. */
   TIMEZONE: Session.getScriptTimeZone() || 'America/New_York',

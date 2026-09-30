@@ -50,7 +50,7 @@ to:transactions.ngustafson+schedule@gmail.com newer_than:7d -label:schedule-proc
 2. Script Property name: `GEMINI_API_KEY`
 3. Value: the API key string
 
-The default model id is `gemini-2.0-flash` in `Config.gs` (`CONFIG.GEMINI_MODEL`). Change it there if you prefer another Generative Language model.
+The default model id is `gemini-3.8-flash` in `Config.gs` (`CONFIG.GEMINI_MODEL`). Change it there if you prefer another Generative Language model.
 
 ### 4. Authorize
 
@@ -95,7 +95,7 @@ Example: forward to `transactions.ngustafson+schedule@gmail.com` → install thi
 | `GEMINI_API_KEY` (Script Property) | *(required)* | Google AI Studio API key |
 | `PROCESSED_LABEL` | `schedule-processed` | Applied after a successful Calendar create |
 | `NEEDS_REVIEW_LABEL` | `schedule-needs-review` | Applied when confidence is low or datetime is missing |
-| `GEMINI_MODEL` | `gemini-2.0-flash` | Generative Language model id |
+| `GEMINI_MODEL` | `gemini-3.8-flash` | Generative Language model id |
 | `TIMEZONE` | script timezone | Context for relative phrases in the prompt |
 | `CONFIDENCE_THRESHOLD` | `0.7` | Below this → needs review, no event |
 | `SEARCH_NEWER_THAN` | `7d` | Gmail search window |
