@@ -76,6 +76,13 @@ Optional Gmail polish: create a filter `to:(you+schedule@gmail.com)` that applie
 
 ## Multiple Gmail accounts
 
+These Gmail accounts already have this script installed. Forward to that account’s plus-address so the event lands on its primary calendar.
+
+| Gmail account | Forward to |
+|---------------|------------|
+| `transactions.ngustafson@gmail.com` | `transactions.ngustafson+schedule@gmail.com` |
+| `noahedwingustafson@gmail.com` | `noahedwingustafson+schedule@gmail.com` |
+
 Apps Script runs **as the Google account that authorized it**. It can only read that account’s Gmail and create events on **that** account’s primary Calendar.
 
 | What you have | What to do |
