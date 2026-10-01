@@ -12,11 +12,29 @@ var CONFIG = {
   /** Gmail label applied after a Calendar event is created successfully. */
   PROCESSED_LABEL: 'schedule-processed',
 
-  /** Gmail label applied when confidence is low or datetime is missing. */
+  /** Gmail label applied when confidence is low or datetime is missing and follow-ups are exhausted. */
   NEEDS_REVIEW_LABEL: 'schedule-needs-review',
 
-  /** Generative Language API model id. */
+  /** Gmail label applied while waiting for the sender to reply with missing event details. */
+  AWAITING_REPLY_LABEL: 'schedule-awaiting-reply',
+
+  /** Script Property that remembers events a thread created, so a later reply does not duplicate one still on the calendar. */
+  THREAD_STATE_PROPERTY: 'SCHEDULE_THREAD_STATE',
+
+  /** Generative Language API model id tried first. */
   GEMINI_MODEL: 'gemini-3.8-flash',
+
+  /** Free models on the same API key, tried in order after GEMINI_MODEL exhausts its attempts. */
+  GEMINI_FALLBACK_MODELS: ['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite'],
+
+  /** Attempts for a transient Gemini HTTP failure such as 503 high demand, including the first call. */
+  GEMINI_MAX_ATTEMPTS: 4,
+
+  /** Attempts for each fallback model before moving to the next one. */
+  GEMINI_FALLBACK_ATTEMPTS: 2,
+
+  /** Base delay in milliseconds before retrying Gemini; each later attempt waits twice as long. */
+  GEMINI_RETRY_BASE_MS: 1000,
 
   /** IANA timezone used when interpreting event times and all-day dates. */
   TIMEZONE: Session.getScriptTimeZone() || 'America/New_York',
@@ -31,7 +49,10 @@ var CONFIG = {
   EMAIL_SELF_ON_SUCCESS: true,
 
   /** When true, reply to the sender when a message needs review. */
-  EMAIL_SELF_ON_NEEDS_REVIEW: true
+  EMAIL_SELF_ON_NEEDS_REVIEW: true,
+
+  /** Visible characters of each message sent to Gemini after HTML is reduced to text. */
+  TRANSCRIPT_CHAR_LIMIT: 200000
 };
 
 /**
@@ -67,6 +88,24 @@ function buildGmailSearchQuery() {
     ' -label:' +
     CONFIG.PROCESSED_LABEL +
     ' -label:' +
-    CONFIG.NEEDS_REVIEW_LABEL
+    CONFIG.NEEDS_REVIEW_LABEL +
+    ' -label:' +
+    CONFIG.AWAITING_REPLY_LABEL
+  );
+}
+
+/**
+ * Builds the Gmail search for threads this script already touched, so a later sender reply is still picked up.
+ */
+function buildAwaitingReplyQuery() {
+  return (
+    '(label:' +
+    CONFIG.AWAITING_REPLY_LABEL +
+    ' OR label:' +
+    CONFIG.PROCESSED_LABEL +
+    ' OR label:' +
+    CONFIG.NEEDS_REVIEW_LABEL +
+    ') newer_than:' +
+    CONFIG.SEARCH_NEWER_THAN
   );
 }
