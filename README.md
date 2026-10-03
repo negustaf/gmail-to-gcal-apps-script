@@ -6,9 +6,9 @@ Every 5 minutes the script searches Gmail for mail addressed to your plus-addres
 
 ## How it works
 
-1. From any email client, forward a confirmation or invite to `you+schedule@gmail.com` (same inbox as `you@gmail.com`). Anything you type above the forwarded message is sent to Gemini as instructions (title, which dates to keep, all-day, duration, location). Dates still have to appear in the forwarded mail or in a later reply.
+1. From any email client, forward a confirmation or invite to `you+schedule@gmail.com` (same inbox as `you@gmail.com`). Anything you type above the forwarded message is sent to Gemini as instructions (title, which dates to keep, all-day, duration, location, who to invite). Dates still have to appear in the forwarded mail or in a later reply.
 2. A time-driven Apps Script trigger runs `processForwardedEmails`. Styled mail is sent to Gemini as the full visible wording: the HTML text is used when it is longer than the plaintext preview, and the original forward stays in the transcript after later replies.
-3. Gemini returns one or more events (`title`, `start`, `end`, `allDay`, `location`, `description`, `confidence`), including explicit deadlines such as “reservations close October 31,” as all-day events when no clock time is stated.
+3. Gemini returns one or more events (`title`, `start`, `end`, `allDay`, `location`, `description`, `guests`, `confidence`), including explicit deadlines such as “reservations close October 31,” as all-day events when no clock time is stated. Emails you ask to invite are added as Calendar guests and sent invites.
 4. On success the thread gets the `schedule-processed` label and (by default) the sender gets a short confirmation reply.
 5. If a date, time, or choice among dates is missing, the sender gets a clarifying question. Each later reply on that thread is sent back to Gemini. There is no follow-up limit.
 6. When the mail is not something to schedule, the thread gets `schedule-needs-review` and the sender gets a needs-review reply. The script does not invent times. Another reply on that thread is still read.

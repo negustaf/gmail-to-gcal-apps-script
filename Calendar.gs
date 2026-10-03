@@ -21,6 +21,7 @@ function createCalendarEventFromData_(eventData) {
   }
 
   var calendar = CalendarApp.getDefaultCalendar();
+  var options = buildCalendarEventOptions_(eventData);
   var event;
 
   if (eventData.allDay) {
@@ -35,7 +36,7 @@ function createCalendarEventFromData_(eventData) {
       'createAllDayEvent',
       { allDay: true, start: startDate, end: endDate },
       function () {
-        return calendar.createAllDayEvent(eventData.title, startDate, endDate);
+        return calendar.createAllDayEvent(eventData.title, startDate, endDate, options);
       }
     );
   } else {
@@ -47,22 +48,27 @@ function createCalendarEventFromData_(eventData) {
       end = new Date(start.getTime() + 60 * 60 * 1000);
     }
     event = runCalendarStep_('createEvent', { allDay: false, start: start, end: end }, function () {
-      return calendar.createEvent(eventData.title, start, end);
-    });
-  }
-
-  if (eventData.location) {
-    runCalendarStep_('setLocation', null, function () {
-      event.setLocation(eventData.location);
-    });
-  }
-  if (eventData.description) {
-    runCalendarStep_('setDescription', null, function () {
-      event.setDescription(eventData.description);
+      return calendar.createEvent(eventData.title, start, end, options);
     });
   }
 
   return event;
+}
+
+/** Builds CalendarApp create options for description, location, guests, and invite delivery. */
+function buildCalendarEventOptions_(eventData) {
+  var options = {};
+  if (eventData.location) {
+    options.location = eventData.location;
+  }
+  if (eventData.description) {
+    options.description = eventData.description;
+  }
+  if (eventData.guests && eventData.guests.length) {
+    options.guests = eventData.guests.join(',');
+    options.sendInvites = true;
+  }
+  return options;
 }
 
 // Runs one CalendarApp call and records the step and the dates that were passed when that call fails.
@@ -129,9 +135,18 @@ function summarizeCalendarAttempt_(eventData) {
     'allDay=' + (data.allDay ? 'yes' : 'no'),
     'location=' + quoteCalendarValue_(data.location),
     'description=' + quoteCalendarValue_(data.description),
+    'guests=' + quoteCalendarValue_(formatGuestsForReport_(data.guests)),
     'confidence=' +
       (data.confidence == null || data.confidence === '' ? '(none)' : String(data.confidence))
   ].join(', ');
+}
+
+/** Joins guest emails for failure reports, or returns empty when none were extracted. */
+function formatGuestsForReport_(guests) {
+  if (!guests || !guests.length) {
+    return '';
+  }
+  return guests.join(', ');
 }
 
 // Quotes a field for the failure report, or (none) when the extracted value is missing.

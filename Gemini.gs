@@ -181,7 +181,9 @@ function buildExtractionPrompt_(transcript, sentAt) {
     'Use later Sender replies to fill gaps from earlier messages. Ignore forwarding wrappers,',
     'headers like "---------- Forwarded message ----------", "Begin forwarded message", and quoted reply markers.',
     'When a Sender message contains "Sender instructions:" and "Source email:", those instructions are directions from the person scheduling.',
-    'Follow them for the title, which dates to keep or drop, all-day versus a timed event, duration, and location.',
+    'Follow them for the title, which dates to keep or drop, all-day versus a timed event, duration, location, and who to invite.',
+    'When the sender asks to invite someone or names an email to put on the invitation, put that address in guests so they receive a Calendar invite.',
+    'Do not put invite emails in description. Do not invent guests from the source email unless the sender asks to invite them.',
     'When the sender names which date to keep, return only that date and drop the others.',
     'Take a date or clock time only from the source email or from a later Sender reply that states it. If neither states a time, do not invent one.',
     'The source email is the full visible wording, not the inbox preview. Use dates anywhere in it, including near the end.',
@@ -199,13 +201,14 @@ function buildExtractionPrompt_(transcript, sentAt) {
     'or when the thread has nothing to put on a calendar.',
     '',
     'Return ONLY a JSON object of this shape:',
-    '{ "events": [ { "title", "start", "end", "allDay", "location", "description", "confidence" } ], "followUp": { "needed": false, "question": null } }',
+    '{ "events": [ { "title", "start", "end", "allDay", "location", "description", "guests", "confidence" } ], "followUp": { "needed": false, "question": null } }',
     '- title (string): short event title taken from the thread',
     '- start (string|null): ISO 8601 datetime, or YYYY-MM-DD for all-day',
     '- end (string|null): ISO 8601 datetime, or YYYY-MM-DD for all-day; null if unknown',
     '- allDay (boolean): true when no clock time is stated',
     '- location (string|null)',
-    '- description (string|null): short note, not the full email',
+    '- description (string|null): short note, not the full email, and not invite addresses',
+    '- guests (string[]|null): email addresses the sender asked to invite; empty or null when none',
     '- confidence (number): 0 to 1 how sure you are the title and date are stated in the thread',
     '- followUp.needed (boolean)',
     '- followUp.question (string|null): one short question the sender can answer by replying to the email',
@@ -289,9 +292,34 @@ function normalizeEvent_(data) {
       data.description != null && String(data.description).trim()
         ? String(data.description).trim()
         : null,
+    guests: normalizeGuests_(data.guests),
     confidence:
       typeof data.confidence === 'number' && !isNaN(data.confidence)
         ? data.confidence
         : 0
   };
+}
+
+/** Collects unique email addresses from a guests array or comma-separated string. */
+function normalizeGuests_(guests) {
+  var raw = [];
+  if (Array.isArray(guests)) {
+    raw = guests;
+  } else if (guests != null && String(guests).trim()) {
+    raw = String(guests).split(/[,;\s]+/);
+  }
+  var emails = [];
+  var seen = {};
+  for (var i = 0; i < raw.length; i++) {
+    var email = String(raw[i] || '')
+      .trim()
+      .toLowerCase()
+      .replace(/^<|>$/g, '');
+    if (!email || seen[email] || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      continue;
+    }
+    seen[email] = true;
+    emails.push(email);
+  }
+  return emails;
 }

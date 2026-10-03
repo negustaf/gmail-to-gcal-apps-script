@@ -826,6 +826,9 @@ function notifySuccess_(message, createdEvents, skippedEvents) {
     lines.push('All-day: ' + (eventData.allDay ? 'yes' : 'no'));
     lines.push('Location: ' + (eventData.location || '(none)'));
     lines.push('Confidence: ' + eventData.confidence);
+    if (eventData.guests && eventData.guests.length) {
+      lines.push('Invited: ' + eventData.guests.join(', '));
+    }
     if (eventData.description) {
       lines.push('Description: ' + eventData.description);
     }
