@@ -8,7 +8,7 @@ Every 5 minutes the script searches Gmail for mail addressed to your plus-addres
 
 1. From any email client, forward a confirmation or invite to `you+schedule@gmail.com` (same inbox as `you@gmail.com`). Anything you type above the forwarded message is sent to Gemini as instructions (title, which dates to keep, all-day, duration, location, who to invite). Dates still have to appear in the forwarded mail or in a later reply.
 2. A time-driven Apps Script trigger runs `processForwardedEmails`. Styled mail is sent to Gemini as the full visible wording: the HTML text is used when it is longer than the plaintext preview, and the original forward stays in the transcript after later replies.
-3. Gemini returns one or more events (`title`, `start`, `end`, `allDay`, `location`, `description`, `guests`, `confidence`), including explicit deadlines such as “reservations close October 31,” as all-day events when no clock time is stated. Emails you ask to invite are added as Calendar guests and sent invites.
+3. Gemini returns one or more events (`title`, `start`, `end`, `allDay`, `location`, `description`, `guests`, `url`, `reminders`, `showAs`, `attachments`, `confidence`), including explicit deadlines such as “reservations close October 31,” as all-day events when no clock time is stated. A place is stored as the matching Google Maps address when one is found, otherwise as the original text. A flight uses the departure airport you drive to unless your note names another place. Emails you ask to invite are added as Calendar guests and sent invites, not only as notes. A link in the mail or in your note is stored on the event. Reminders, show-as-free, and attachments are applied when your note above the forward asks for them.
 4. On success the thread gets the `schedule-processed` label and (by default) the sender gets a short confirmation reply.
 5. If a date, time, or choice among dates is missing, the sender gets a clarifying question. Each later reply on that thread is sent back to Gemini. There is no follow-up limit.
 6. When the mail is not something to schedule, the thread gets `schedule-needs-review` and the sender gets a needs-review reply. The script does not invent times. Another reply on that thread is still read.
@@ -56,7 +56,7 @@ The default model id is `gemini-3.8-flash` in `Config.gs` (`CONFIG.GEMINI_MODEL`
 ### 4. Authorize
 
 1. In the editor, select `processForwardedEmails` (or `setupTrigger`) and click **Run**.
-2. Approve Gmail, Calendar, and external request access when prompted.
+2. Approve Gmail, Calendar, Drive file, and external request access when prompted. Drive access is only used to store a file you asked to attach. After this update, run the script once and approve the new Calendar and Drive permissions.
 
 ### 5. Install the 5-minute trigger
 

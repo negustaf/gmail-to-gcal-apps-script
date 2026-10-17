@@ -3,9 +3,12 @@
  * Handles timed ISO datetimes and all-day YYYY-MM-DD (or date-only) values.
  * Returns the created CalendarEvent.
  */
-function createCalendarEvent(eventData) {
+function createCalendarEvent(eventData, extras) {
   try {
-    return createCalendarEventFromData_(eventData);
+    resolveEventLocation_(eventData);
+    var event = createCalendarEventFromData_(eventData);
+    applyExtraCalendarFields_(event, eventData, extras || {});
+    return event;
   } catch (err) {
     rethrowCalendarCreateFailure_(eventData, err);
   }
@@ -69,6 +72,241 @@ function buildCalendarEventOptions_(eventData) {
     options.sendInvites = true;
   }
   return options;
+}
+
+// Replaces a place name with the Google Maps formatted address, or keeps the original text when nothing matches.
+function resolveEventLocation_(eventData) {
+  var plain = eventData.location ? String(eventData.location).trim() : '';
+  if (!plain) {
+    eventData.location = null;
+    eventData.locationIsMapped = false;
+    return;
+  }
+  var forceAirport =
+    !!eventData.isFlight &&
+    !eventData.locationFromPrompt &&
+    !/\d/.test(plain) &&
+    plain.indexOf(',') === -1;
+  var query = forceAirport && !/airport/i.test(plain) ? plain + ' airport' : plain;
+  var matched = geocodeLocation_(query, forceAirport || /airport/i.test(query));
+  if (!matched && query !== plain) {
+    matched = geocodeLocation_(plain, false);
+  }
+  eventData.location = matched || plain;
+  eventData.locationIsMapped = !!matched;
+}
+
+// Looks up one place and prefers an airport result when the event is a flight.
+function geocodeLocation_(query, preferAirport) {
+  try {
+    var response = Maps.newGeocoder().geocode(query);
+    if (!response || response.status !== 'OK' || !response.results || !response.results.length) {
+      return null;
+    }
+    if (preferAirport) {
+      for (var i = 0; i < response.results.length; i++) {
+        var airport = response.results[i];
+        var types = airport.types || [];
+        if (types.indexOf('airport') !== -1 && airport.formatted_address) {
+          return airport.formatted_address;
+        }
+      }
+      return null;
+    }
+    var first = response.results[0];
+    if (first.partial_match || !first.formatted_address) {
+      return null;
+    }
+    return first.formatted_address;
+  } catch (err) {
+    Logger.log('Geocode failed for ' + query + ': ' + err);
+    return null;
+  }
+}
+
+// Adds reminders, free/busy, the event link, and attachments after the event exists.
+function applyExtraCalendarFields_(event, eventData, extras) {
+  eventData.fieldWarnings = eventData.fieldWarnings || [];
+  try {
+    applyReminders_(event, eventData.reminders);
+  } catch (err) {
+    eventData.fieldWarnings.push('Reminders were not saved (' + err + ').');
+  }
+  if (eventData.showAs === 'free') {
+    try {
+      event.setTransparency(CalendarApp.EventTransparency.TRANSPARENT);
+    } catch (err) {
+      eventData.fieldWarnings.push('Show as free was not saved (' + err + ').');
+    }
+  }
+  try {
+    eventData.calendarAttachments = collectCalendarAttachments_(eventData, extras);
+    eventData.attachmentTitles = attachmentTitles_(eventData.calendarAttachments);
+    if (
+      eventData.attachEmailFiles &&
+      !(eventData.driveUrls && eventData.driveUrls.length) &&
+      !eventData.calendarAttachments.length
+    ) {
+      eventData.fieldWarnings.push('No email attachment matched the prompt.');
+    }
+    patchCalendarLinkAndFiles_(event, eventData);
+  } catch (err) {
+    eventData.fieldWarnings.push('Link or attachments were not saved (' + err + ').');
+  }
+}
+
+// Replaces default alerts with the lead times requested in the email prompt.
+function applyReminders_(event, reminders) {
+  if (!reminders || !reminders.length) {
+    return;
+  }
+  event.removeAllReminders();
+  for (var i = 0; i < reminders.length; i++) {
+    var minutes = reminders[i].minutes;
+    if (reminders[i].method === 'email') {
+      event.addEmailReminder(minutes);
+    } else {
+      event.addPopupReminder(minutes);
+    }
+  }
+}
+
+// Uploads email files the prompt asked to attach and includes any Drive links from the prompt.
+function collectCalendarAttachments_(eventData, extras) {
+  var files = [];
+  var driveUrls = eventData.driveUrls || [];
+  for (var i = 0; i < driveUrls.length && files.length < 25; i++) {
+    files.push({ fileUrl: driveUrls[i], title: 'Drive file' });
+  }
+  if (!eventData.attachEmailFiles) {
+    return files;
+  }
+  var cache = extras.attachmentCache || {};
+  var messages = extras.messages || [];
+  var blobs = emailAttachmentBlobs_(messages, eventData.attachmentNames);
+  for (var b = 0; b < blobs.length && files.length < 25; b++) {
+    var key = blobs[b].key;
+    if (!cache[key]) {
+      cache[key] = uploadCalendarAttachment_(blobs[b].blob);
+    }
+    files.push(cache[key]);
+  }
+  return files;
+}
+
+// Collects non-inline email files, limited to named files when the prompt names them.
+function emailAttachmentBlobs_(messages, names) {
+  var blobs = [];
+  var seen = {};
+  for (var i = 0; i < messages.length; i++) {
+    if (messageIsFromScript_(messages[i])) {
+      continue;
+    }
+    var attachments = messages[i].getAttachments({
+      includeInlineImages: false,
+      includeAttachments: true
+    });
+    for (var a = 0; a < attachments.length; a++) {
+      var file = attachments[a];
+      var name = file.getName() || 'attachment';
+      if (!attachmentNameMatches_(name, names)) {
+        continue;
+      }
+      if (file.getSize && file.getSize() > 15 * 1024 * 1024) {
+        continue;
+      }
+      var key = name + ':' + (file.getSize ? file.getSize() : blobs.length);
+      if (seen[key]) {
+        continue;
+      }
+      seen[key] = true;
+      blobs.push({ key: key, blob: file.copyBlob() });
+    }
+  }
+  if (!blobs.length && names && names.length) {
+    return emailAttachmentBlobs_(messages, []);
+  }
+  return blobs;
+}
+
+// Returns true when no filenames were requested or this file matches one of them.
+function attachmentNameMatches_(name, names) {
+  if (!names || !names.length) {
+    return true;
+  }
+  var fileName = String(name || '').toLowerCase();
+  for (var i = 0; i < names.length; i++) {
+    var wanted = String(names[i] || '').toLowerCase();
+    if (wanted && (fileName.indexOf(wanted) !== -1 || wanted.indexOf(fileName) !== -1)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// Saves one email file into Drive so Calendar can attach it.
+function uploadCalendarAttachment_(blob) {
+  var folder = getScheduleAttachmentFolder_();
+  var file = folder.createFile(blob);
+  return {
+    fileUrl: file.getUrl(),
+    title: file.getName(),
+    mimeType: file.getMimeType() || blob.getContentType() || 'application/octet-stream'
+  };
+}
+
+// Finds or creates the Drive folder that holds files attached to scheduled events.
+function getScheduleAttachmentFolder_() {
+  var name = 'Schedule attachments';
+  var folders = DriveApp.getFoldersByName(name);
+  if (folders.hasNext()) {
+    return folders.next();
+  }
+  return DriveApp.createFolder(name);
+}
+
+// Writes the event link and Drive attachments through the Calendar API.
+function patchCalendarLinkAndFiles_(event, eventData) {
+  var files = eventData.calendarAttachments || [];
+  if (!eventData.url && !files.length) {
+    return;
+  }
+  var patch = {};
+  if (eventData.url) {
+    patch.source = {
+      url: eventData.url,
+      title: String(eventData.title || 'Link').substring(0, 200)
+    };
+  }
+  if (files.length) {
+    patch.attachments = files;
+  }
+  var id = String(event.getId() || '');
+  var at = id.indexOf('@');
+  if (at !== -1) {
+    id = id.substring(0, at);
+  }
+  Calendar.Events.patch(patch, 'primary', id, { supportsAttachments: files.length > 0 });
+}
+
+// Lists attachment titles for the confirmation email.
+function attachmentTitles_(files) {
+  var titles = [];
+  for (var i = 0; i < files.length; i++) {
+    if (files[i].title) {
+      titles.push(files[i].title);
+    }
+  }
+  return titles;
+}
+
+// Formats reminder lead times for the confirmation email.
+function formatRemindersForReport_(reminders) {
+  var parts = [];
+  for (var i = 0; i < reminders.length; i++) {
+    parts.push(reminders[i].minutes + ' min ' + reminders[i].method);
+  }
+  return parts.join(', ');
 }
 
 // Runs one CalendarApp call and records the step and the dates that were passed when that call fails.
@@ -136,6 +374,8 @@ function summarizeCalendarAttempt_(eventData) {
     'location=' + quoteCalendarValue_(data.location),
     'description=' + quoteCalendarValue_(data.description),
     'guests=' + quoteCalendarValue_(formatGuestsForReport_(data.guests)),
+    'url=' + quoteCalendarValue_(data.url),
+    'showAs=' + quoteCalendarValue_(data.showAs),
     'confidence=' +
       (data.confidence == null || data.confidence === '' ? '(none)' : String(data.confidence))
   ].join(', ');

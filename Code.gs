@@ -93,11 +93,11 @@ function processOneMessage_(
 ) {
   var message = latestInboundMessage_(messages);
   seedCreatedEventsFromThread_(state, threadId, messages);
-  var extraction = extractEventFromEmail(
-    buildConversationTranscript_(messages),
-    message.getDate()
-  );
+  var transcript = buildConversationTranscript_(messages);
+  var extraction = extractEventFromEmail(transcript, message.getDate());
   var extracted = extraction.events || [];
+  applyInstructionOverrides_(extracted, transcript);
+  var attachmentCache = {};
   var created = [];
   var duplicates = [];
   var skipped = [];
@@ -114,7 +114,10 @@ function processOneMessage_(
         if (rememberedEventStillOnCalendar_(state, threadId, eventData)) {
           duplicates.push(eventData);
         } else {
-          var event = createCalendarEvent(eventData);
+          var event = createCalendarEvent(eventData, {
+            messages: messages,
+            attachmentCache: attachmentCache
+          });
           eventData.calendarEventId = event.getId();
           rememberEvent_(state, threadId, eventData, event.getId());
           created.push(eventData);
@@ -825,12 +828,30 @@ function notifySuccess_(message, createdEvents, skippedEvents) {
     lines.push('End: ' + (eventData.end || '(none)'));
     lines.push('All-day: ' + (eventData.allDay ? 'yes' : 'no'));
     lines.push('Location: ' + (eventData.location || '(none)'));
+    if (eventData.location && eventData.locationIsMapped === false) {
+      lines.push('Location match: plain text (no Google Maps result)');
+    }
     lines.push('Confidence: ' + eventData.confidence);
     if (eventData.guests && eventData.guests.length) {
       lines.push('Invited: ' + eventData.guests.join(', '));
     }
+    if (eventData.url) {
+      lines.push('URL: ' + eventData.url);
+    }
+    if (eventData.showAs === 'free') {
+      lines.push('Show as: free');
+    }
+    if (eventData.reminders && eventData.reminders.length) {
+      lines.push('Reminders: ' + formatRemindersForReport_(eventData.reminders));
+    }
+    if (eventData.attachmentTitles && eventData.attachmentTitles.length) {
+      lines.push('Attachments: ' + eventData.attachmentTitles.join(', '));
+    }
     if (eventData.description) {
       lines.push('Description: ' + eventData.description);
+    }
+    if (eventData.fieldWarnings && eventData.fieldWarnings.length) {
+      lines.push('Warnings: ' + eventData.fieldWarnings.join(' '));
     }
     lines.push('');
   }
